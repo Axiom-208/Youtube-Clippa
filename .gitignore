@@ -1,0 +1,21 @@
+# Environment variables
+.env
+
+# Virtual environments
+env/
+
+# Generated files
+chapters/
+output.mp4
+audio.mp3
+transcript.txt
+topic_segments.json
+*.mp4
+*.mp3
+
+# Test files
+test.py
+app.py
+test2.py
+
+
