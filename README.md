@@ -1,4 +1,4 @@
-# Youtube-Clipper
+# Youtube-Clippa
 Youtube video gets turned into a collection of clip highlights called 'Chapters'.
 
 ## Installation
