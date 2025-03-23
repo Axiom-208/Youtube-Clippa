@@ -1,0 +1,35 @@
+Start0:0, End: 0:5, Text:  Heya everybody! So let's talk about tree traversal. Tree traversal is the process of visiting all the
+Start0:5, End: 0:10, Text:  nodes of a tree. We don't have random access, so we begin at the root node and follow a certain
+Start0:10, End: 0:15, Text:  procedure to visit all of the nodes of a tree. And there's three that we're going to talk about.
+Start0:15, End: 0:21, Text:  In-order, post-order, and pre-order traversal. In this example we will be working with a binary
+Start0:21, End: 0:27, Text:  tree, not a binary search tree, because these values are not in binary search tree order.
+Start0:27, End: 0:34, Text:  So each node has at most two children, a left node and a right node. Let's begin with an
+Start0:34, End: 0:41, Text:  in-order traversal. Here's a recursive method that will navigate a tree in order. Using recursion,
+Start0:41, End: 0:47, Text:  we visit as many left nodes as we can, followed by the root node, and then any right nodes.
+Start0:47, End: 0:53, Text:  The entry point is always the root, and using recursion we will go as far left as we can.
+Start0:53, End: 1:0, Text:  So we go from A to B to D. So we will mark this node as visited, then visit the root node next,
+Start1:1, End: 1:6, Text:  and then the right node. Since we can't go left anymore, we're going to visit the root node,
+Start1:7, End: 1:13, Text:  A. All that's left is to go right, so we will go to C. However, we can go left, so we will visit
+Start1:13, End: 1:21, Text:  F first, then C, then G. So this is in-order traversal. When used in the context of a binary
+Start1:21, End: 1:30, Text:  search tree, we will visit all of these nodes in non-decreasing order. So again, that was D, B, E,
+Start1:32, End: 1:42, Text:  A, F, C, G. We go left, root, right, and here's that method again. And here's post-order traversal.
+Start1:42, End: 1:49, Text:  It's used to delete a tree from leaf to root, and we follow this pattern, left, right, root.
+Start1:49, End: 1:56, Text:  We will use recursion to visit the left children, then the right children, then the root. So A is
+Start1:56, End: 2:3, Text:  our entry point. We are going as far left as we can. Go from A to B to D. Mark D as visited,
+Start2:3, End: 2:13, Text:  then we go right using recursion. Go from D to E, then root. Left, right, root. So we go back up,
+Start2:13, End: 2:18, Text:  go as far right as we can, unless we encounter a left child, which we did, so we will mark
+Start2:18, End: 2:27, Text:  F as visited, then G, right, root. Left, right, root. And all that's left is the root node.
+Start2:28, End: 2:35, Text:  So that is post-order traversal. It's used to delete a tree from leaf to root. And lastly,
+Start2:35, End: 2:41, Text:  we have pre-order traversal. Pre-order traversal is used to create a copy of a tree.
+Start2:41, End: 2:47, Text:  We visit any root nodes first, then left, then right. So we will mark A as visited,
+Start2:47, End: 2:54, Text:  our entry point, then visit the left child, and we will continue to go left, then go right.
+Start2:54, End: 3:0, Text:  So we can't go left anymore, we're going to go right, mark the root as visited, then left,
+Start3:0, End: 3:6, Text:  then right. This is used to create a copy of a tree. But in order to create a copy of a tree,
+Start3:6, End: 3:13, Text:  you need to create a root node and a branch node to hold the leaves. So again, that's root, left,
+Start3:13, End: 3:26, Text:  we're still going left, right. Root, left, right. A, B, D, E, C, F, G. That is pre-order traversal.
+Start3:26, End: 3:31, Text:  It's used to create a copy of a tree. Well, okay then everybody, that is a few ways in which we
+Start3:31, End: 3:37, Text:  can traverse a tree. Like I said, normally we don't have random access, so the entry point
+Start3:37, End: 3:42, Text:  is the root node, and you can either follow an in-order, post-order, or pre-order traversal,
+Start3:42, End: 3:47, Text:  depending on what you need to do with this tree. So that's tree traversal in computer science.
+Start3:47, End: 3:52, Text:  If you liked this video, please be sure to give it a thumbs up, leave a random comment down below,
+Start3:52, End: 3:55, Text:  and subscribe if you'd like to become a fellow bro.
