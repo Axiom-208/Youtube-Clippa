@@ -12,6 +12,7 @@ transcript.txt
 topic_segments.json
 *.mp4
 *.mp3
+*.txt
 
 # Test files
 test.py
