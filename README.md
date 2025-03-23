@@ -5,8 +5,8 @@ Youtube video gets turned into a collection of clip highlights called 'Chapters'
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/Axiom-208/Youtube-Clipper.git
-cd youtube-clipper
+git clone git@github.com:Axiom-208/Youtube-Clippa.git
+cd youtube-clippa
 ```
 ### 2. Create a virtual environment
 ```bash
