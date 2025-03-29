@@ -17,10 +17,11 @@ app = Flask(__name__)
 def downloadVideo(url):
     """Given a url to a youtube video, it locally downloads the video"""
     video_filename = 'output.mp4'
+    
     ydl_opts = {
-    'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/mp4',
-    'outtmpl': video_filename,  # Output filename saved as output.mp4
-    'merge_output_format': 'mp4',    # Force merged output to be MP4
+        'format': 'bestvideo+bestaudio/best',
+        'outtmpl': video_filename,  # Output filename saved as output.mp4
+        'merge_output_format': 'mp4',  # Force merged output to be MP4
     }
     try:
         with YoutubeDL(ydl_opts) as ydl:
@@ -31,8 +32,6 @@ def downloadVideo(url):
         print(f"An error occurred: {e}")
         return None
 
-    print("Video Downloaded")
-
 
 def getAudio(video_path):
     """Given a video filepath as it's input, it converts the video to audio"""
@@ -40,7 +39,7 @@ def getAudio(video_path):
     try:
         (
             ffmpeg.input(video_path)
-            .output(audio_filename)
+            .output(audio_filename, format='mp3', acodec='libmp3lame', ab='128k', vn=None)
             .run(overwrite_output=True)
         )
         print("Successfully converted to audio.mp3")
