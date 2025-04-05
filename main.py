@@ -1,16 +1,37 @@
-from flask import Flask, redirect, render_template, request, send_file
+from flask import Flask, redirect, render_template, request, send_file, url_for
 from yt_dlp import YoutubeDL
 import ffmpeg
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
 import json
+from threading import Thread
+import firebase_admin
+from firebase_admin import credentials, storage
+
 
 
 # Set up
 load_dotenv()
 api_key=os.getenv("API_KEY")
+cred_path=os.getenv("FIREBASE_CREDENTIALS_PATH")
+bucket_name=os.getenv("FIREBASE_STORAGE_BUCKET")
+
 app = Flask(__name__)
+
+firebase_init = False
+try:
+
+    cred = credentials.Certificate(cred_path)
+    firebase_admin.initialize_app(cred, {
+        'storageBucket': bucket_name
+    })
+    bucket = storage.bucket()
+    firebase_init = True
+except Exception as e:
+    print(f"Firebase Initialisation error: {e}")
+    firebase_init = False
+
 
 
 # Functions
@@ -42,6 +63,8 @@ def getAudio(video_path):
             .output(audio_filename, format='mp3', acodec='libmp3lame', ab='128k', vn=None)
             .run(overwrite_output=True)
         )
+
+
         print("Successfully converted to audio.mp3")
         return audio_filename
     except Exception as e:
@@ -81,6 +104,10 @@ def generateTranscripts(audio_file):
                 file.write(f"Start{format_time(start_time)}, End: {format_time(end_time)}, Text: {text}\n")
 
         print("Transcript file generated as {transcript_filename}")
+
+
+
+
         # Return raw transcript content for next function
         full_transcript = " ".join([segment.text for segment in transcription.segments])
         return transcript_filename, full_transcript
@@ -117,6 +144,10 @@ def transcriptHighlights(transcript):
         Transcript:
         {transcript}
         """
+
+
+
+
 
         # API call to analyse the transcripts
         topic_response = client.chat.completions.create(
@@ -172,7 +203,8 @@ def trimVideo(video, segments):
             # Output filename
             output_filename = f"{output_dir}/clip_{i+1}_{clean_title}.mp4"
             created_clips.append(output_filename)
-            print(f"Creating clip: {output_filename}")
+
+            
 
             try:
                 # Use ffmpeg-python to cut the clip
@@ -182,17 +214,44 @@ def trimVideo(video, segments):
                     .output(output_filename)
                     .run()
                 )
-                print(f"Successfully created clip {i+1}")
+                # Uploading to firebase
+                blob = bucket.blob(output_filename) # Referrence to storage location
+                blob.upload_from_filename(output_filename)
+                blob.make_public()
+                public_url = blob.public_url
+                print(public_url)
+                # After upload is done we remove the videos stored locally
+                os.remove(output_filename)
             except Exception as e:
                 print(f"Error creating clip {i+1}: {e}")
+
+
+        os.rmdir(output_dir) # Removes directory
         print("All clips have been created")
         return created_clips
     except Exception as e:
         print(f"an Error occurred during video trimming: {e}")
         return None
     
-
-def main(url):
+#  Runs in a background thread
+def process_video_in_background(url):
+    """Process video in a background thread"""
+    try:
+        main(url)
+        print(f"Finished processing video: {url}")
+    except Exception as e:
+        print(f"Error in background processing {e}")
+    finally:
+        # Clean up temp files
+        temp_files = ['output.mp4', 'audio.mp3', 'transcripts.txt', 'topic_segments.json']
+        for file in temp_files:
+            if os.path.exists(file):
+                try:
+                    os.remove(file)
+                except Exception as e:
+                    print(f"Error removing {file}: {e}")
+    return
+def main(url, job_dir=None):
     """Main function to coordinate entire workflow"""
     print("Starting video processing workflow")
     # 1: Download video
@@ -223,19 +282,8 @@ def main(url):
         return
     
     print("Video Processing Complete")
-    print(f"Original Video: {video_path}")
-    print(f"Audio File: {audio_path}")
-    print(f"Transcript: {transcript_path}")
-    print(f"Topic Segments: {segments_path}")
-    print(f"Created {len(clip_path)} clips in the 'chapters' folder")
 
-    return {
-        "video": video_path,
-        "audio": audio_path,
-        "transcript": transcript_path,
-        "segments": segments_path,
-        "clips": clip_path
-    }
+    return
 
 
 # Page Routes
@@ -247,23 +295,43 @@ def index():
 # Route to display form where users enter video link
 @app.route('/download', methods=['POST', 'GET'])
 def download():
-    # Check if the Download button was clicked, sending a POST request
     error = None
+    video_files = []
+    processing = False
+
+    # Getting videos from firebase
+    if firebase_init:
+        try:
+            blobs = bucket.list_blobs(prefix='chapters/')
+            if blobs:
+                for blob in blobs:
+                    if blob.name.startswith('chapters/'):
+                        blob.make_public()
+                        video_files.append({
+                            'name': blob.name.split('/')[-1], # Just the filename
+                            'url': blob.public_url             # Direct URL to the file
+                        })
+        except Exception as e:
+            error = f"Error retrieving videos: {e}."
+    else:
+        error = "Firebase storage is not configured properly."
+    
+
+    # Process form submission
     if request.method == "POST":
         url = request.form['url']
         if not url.startswith(('https://www.youtube.com/')):
            error = "Please enter a valid Youtube URL" 
-        else:
-            main(url)
-        # Calling function to start video processing pipeline
-    # Getting the videos from the chapters directory
-    chapter_dir = 'chapters'
-    video_files = []
-    if os.path.exists(chapter_dir) and os.path.isdir(chapter_dir):
-        for filename in os.listdir(chapter_dir):
-            video_files.append(filename)
-        print(f"Video files found: {video_files}")
-    return render_template('download.jinja', video_files=video_files, error=error)
+        elif firebase_init: # Only process if firebase works
+            # Start processing in a background thread
+            thread = Thread(target=process_video_in_background, args=(url,))
+            thread.daemon = True # Ensures thread closes when main program exits
+            thread.start()
+            return redirect(url_for('download', processing=True)) # Making a GET request
+    if request.args.get('processing') == 'True':
+        processing=True
+
+    return render_template('download.jinja', video_files=video_files, error=error, processing=processing)
 
    
 @app.route('/chapters/<path:filename>')

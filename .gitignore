@@ -19,4 +19,5 @@ test.py
 app.py
 test2.py
 
-
+# Credentials
+firebase-key.json
