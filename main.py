@@ -205,14 +205,13 @@ def trimVideo(video, segments):
             created_clips.append(output_filename)
 
             
-
             try:
                 # Use ffmpeg-python to cut the clip
                 (
                     ffmpeg
                     .input(video, ss=start, to=end)
-                    .output(output_filename)
-                    .run()
+                    .output(output_filename, c='copy')
+                    .run(capture_stdout=True, capture_stderr=True)
                 )
                 # Uploading to firebase
                 blob = bucket.blob(output_filename) # Referrence to storage location
@@ -333,7 +332,6 @@ def download():
 
     return render_template('download.jinja', video_files=video_files, error=error, processing=processing)
 
-   
 @app.route('/chapters/<path:filename>')
 def chapters_static(filename):
     return send_file(os.path.join('chapters', filename))
