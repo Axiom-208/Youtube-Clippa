@@ -1,11 +1,14 @@
-from flask import Flask, redirect, render_template, request, send_file, url_for
+from flask import Flask, request, jsonify
 from yt_dlp import YoutubeDL
 import ffmpeg
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
 import json
+import uuid
+from datetime import datetime
 from threading import Thread
+from flask_cors import CORS
 import firebase_admin
 from firebase_admin import credentials, storage
 
@@ -18,7 +21,7 @@ cred_path=os.getenv("FIREBASE_CREDENTIALS_PATH")
 bucket_name=os.getenv("FIREBASE_STORAGE_BUCKET")
 
 app = Flask(__name__)
-
+CORS(app)
 firebase_init = False
 try:
 
@@ -32,7 +35,8 @@ except Exception as e:
     print(f"Firebase Initialisation error: {e}")
     firebase_init = False
 
-
+# In-memory tracking for different jobs'
+jobs = {}
 
 # Functions
 def downloadVideo(url):
@@ -202,7 +206,7 @@ def trimVideo(video, segments):
 
             # Output filename
             output_filename = f"{output_dir}/clip_{i+1}_{clean_title}.mp4"
-            created_clips.append(output_filename)
+            
 
             
             try:
@@ -218,7 +222,11 @@ def trimVideo(video, segments):
                 blob.upload_from_filename(output_filename)
                 blob.make_public()
                 public_url = blob.public_url
-                print(public_url)
+                # Storing the public URLs of the clips
+                created_clips.append({
+                    'title': topic['title'],
+                    'url': public_url
+                })
                 # After upload is done we remove the videos stored locally
                 os.remove(output_filename)
             except Exception as e:
@@ -232,13 +240,36 @@ def trimVideo(video, segments):
         print(f"an Error occurred during video trimming: {e}")
         return None
     
+
+
 #  Runs in a background thread
-def process_video_in_background(url):
+def process_video_in_background(url, job_id):
     """Process video in a background thread"""
+
+    # Initilialising job status
+    jobs[job_id] = {
+        'status': 'processing',
+        'created_at': datetime.now().isoformat(),
+        'clips': []
+    }
+
     try:
-        main(url)
+        clips = main(url)
+
+        # Update job status and store clip info
+        if clips:
+            jobs[job_id]['status'] = 'completed'
+            jobs[job_id]['clips'] = clips
+        else:
+            jobs[job_id]['status'] = 'failed'
+            jobs[job_id]['error'] = 'Failed to generate video'
+
         print(f"Finished processing video: {url}")
     except Exception as e:
+
+        # Update job status if failed
+        jobs[job_id]['status'] = 'failed'
+        jobs[job_id]['error'] =  str(e)
         print(f"Error in background processing {e}")
     finally:
         # Clean up temp files
@@ -250,6 +281,7 @@ def process_video_in_background(url):
                 except Exception as e:
                     print(f"Error removing {file}: {e}")
     return
+
 def main(url, job_dir=None):
     """Main function to coordinate entire workflow"""
     print("Starting video processing workflow")
@@ -275,66 +307,73 @@ def main(url, job_dir=None):
         return
     
     # 5: Trim the video into clips based on topic segments
-    clip_path = trimVideo(video_path, segment_data)
-    if not clip_path:
+    clips = trimVideo(video_path, segment_data)
+    if not clips:
         print("Failed to generate video clips. Exiting")
         return
     
     print("Video Processing Complete")
 
-    return
+    return clips
 
 
-# Page Routes
-@app.route('/')
-def index():
-    return render_template('index.jinja')
+
+@app.route('/api/clips/create', methods=['POST'])
+def create_clips():
+    """API endpoint to create clips from a youtube URL"""
+    try:
+        # Get data from request
+        data = request.json
+        youtube_url = data.get('url')
+        # user_id = data.get('user_id', 'anon')
+
+        if not youtube_url:
+            return jsonify({
+                'success': False,
+                'error': 'Missing Youtube URL'
+            }), 400
+        if not youtube_url.startswith(('https://www.youtube.com/', 'https://youtu.be/')):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid Youtube URL'
+            }), 400 # Bad Request
+
+        # Generate unique job ID
+        job_id = str(uuid.uuid4())
+        
+        # Start processing in a background thread
+        thread = Thread(target=process_video_in_background, args=(youtube_url, job_id))
+        thread.daemon = True # Ensures thread closes when main program exits
+        thread.start()
+
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'message': 'Processing started'
+        }), 202 # Accepted but processing
     
+    except Exception as e:
+        return jsonify ({
+            'success': False,
+            'error':str(e)
+        }), 500 # Internal Server error
 
-# Route to display form where users enter video link
-@app.route('/download', methods=['POST', 'GET'])
-def download():
-    error = None
-    video_files = []
-    processing = False
-
-    # Getting videos from firebase
-    if firebase_init:
-        try:
-            blobs = bucket.list_blobs(prefix='chapters/')
-            if blobs:
-                for blob in blobs:
-                    if blob.name.startswith('chapters/'):
-                        blob.make_public()
-                        video_files.append({
-                            'name': blob.name.split('/')[-1], # Just the filename
-                            'url': blob.public_url             # Direct URL to the file
-                        })
-        except Exception as e:
-            error = f"Error retrieving videos: {e}."
-    else:
-        error = "Firebase storage is not configured properly."
+@app.route('/api/clips/<job_id>', methods=['GET'])
+def get_clips_status(job_id):
+    """API endpoint to check status of a job generating clips"""
+    if job_id not in jobs:
+        return jsonify({
+            'success': False,
+            'error': 'Job not found'
+        }), 404
     
-
-    # Process form submission
-    if request.method == "POST":
-        url = request.form['url']
-        if not url.startswith(('https://www.youtube.com/')):
-           error = "Please enter a valid Youtube URL" 
-        elif firebase_init: # Only process if firebase works
-            # Start processing in a background thread
-            thread = Thread(target=process_video_in_background, args=(url,))
-            thread.daemon = True # Ensures thread closes when main program exits
-            thread.start()
-            return redirect(url_for('download', processing=True)) # Making a GET request
-    if request.args.get('processing') == 'True':
-        processing=True
-
-    return render_template('download.jinja', video_files=video_files, error=error, processing=processing)
-
-@app.route('/chapters/<path:filename>')
-def chapters_static(filename):
-    return send_file(os.path.join('chapters', filename))
-
+    job_data = jobs[job_id]
+    return jsonify({
+        'success':True,
+        'job_id': job_id,
+        'status': job_data['status'],
+        'created_at': job_data['created_at'],
+        'clips': job_data.get('clips', []) # incase the clips haven't been created
+    })
 if __name__ in "__main__":
     app.run(debug=True)
