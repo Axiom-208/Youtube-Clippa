@@ -149,10 +149,6 @@ def transcriptHighlights(transcript):
         {transcript}
         """
 
-
-
-
-
         # API call to analyse the transcripts
         topic_response = client.chat.completions.create(
             model="gpt-4-turbo",
